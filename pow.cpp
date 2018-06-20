@@ -5,9 +5,8 @@
 #include <math.h>
 #include <chrono>
 #include <stdint.h>
+#include <limits> // for being able to display all double digits
 using namespace std; 
-
-// int64_t ppp;
 
 // Compiled with  g++ -std=c++8
 
@@ -21,6 +20,12 @@ using namespace std;
 // hashes per Watt because the simpe math functions should already be 
 // optimized, and this random combination of them should not be 
 // mathematically optimizable.
+//
+// A key component is a "extract 12 digits routine.  It disconnects
+// the previous function's math determininism from the next one
+// so that a mathmatically or logicial simplification should not be possible.
+// It also discards the lower 2 digits of the double to prevent differences
+// in systems.
 // 
 // What it does:  
 // k = sha265(nonce + previous hash)  // modeled but not included here.
@@ -31,15 +36,15 @@ using namespace std;
 // After N iterations, final k (12 digits) goes through sha256 to see if it 
 // is below the target.
 
-double extract_12_digits 
-	(double k) {
-		int n; double intpart;
+long double extract_12_digits 
+	(long double k) {
+		int n; long double intpart;
 		// Get the significand from k in base 2
 		k = frexp (k , &n);
 		// Throw away top 2 significands because of base 2 problem. This has a
 		// very important side effect: prevents the math operation
 		// sequences from being simplified mathematically. 
-		k = modf (100*k , &intpart); 
+		k = modfl (100*k , &intpart); // modf for doubles, modfl for long doubles
 		// Get remaining top 12 digits. Thows away lower digits that
 		// might have had a difference on different systems.
 		k = (int64_t)(k*1e12);
@@ -56,13 +61,15 @@ int POW
  () {
 int64_t iterations = 100000; // for each nonce
 
-int64_t nonce, nonces = 300000; // number of nonces to simulate
+int64_t nonce, nonces = 50; // number of nonces to simulate
 vector<int64_t> output(nonces);
-int nFunctions = 7;
+int nFunctions = 8;
+int repeat = 2;
+int nSeq = nFunctions*repeat;
 
-double last_avg = 5e+11; // Assume avg was correct to get a std_dev
-double hash = 1.234567801123456e76; // sha256 of (nonce + prev block hash)
-double k, k2, intpart, fractpart, averg, std_dev;
+long double last_avg = 5e+11; // Assume avg was correct to get a std_dev
+long double hash = 1.234567801123456e76; // sha256 of (nonce + prev block hash)
+long double k, k2, intpart, fractpart, averg, std_dev;
 int64_t sysTime;
 int n, seq, function_count, temp;
 
@@ -79,7 +86,7 @@ for (nonce = 1; nonce < nonces; nonce++) {
 	// The above did not give me a smooth "random" distribution but
 	// the following seemed to fix it by throwing away top 2 digits.
 	// Throwing away 1 digit was not enough to get correct average k.
-	fractpart = modf (100*k , &intpart);
+	fractpart = modfl (100*k , &intpart);  // modf for doubles, modfl for long doubles
 
 	// Get 12 digits of k as initial seed
 	k = (int64_t)(fractpart*1e12);
@@ -92,12 +99,12 @@ for (nonce = 1; nonce < nonces; nonce++) {
 	// Example: functions[0] will be the first of 16 functs. It's 
 	// value is 1 to 8 which determins which function. 
 	// Program will perform 0 to 21 math functions in sequence.
-	vector<int> functs(nFunctions*2);
+	vector<int> functs(nSeq);
 	
 	seq=0; function_count = 0; 	temp = 0;
 	k2=k; // get copy of k
 	int j=0;
-	while ( seq < nFunctions*2 ) {	//
+	while ( seq < nSeq ) {	//
 		j++;
 		temp = 1+((int64_t)(k2) % nFunctions);
 		// Seach functions found so far to make sure function has not 
@@ -107,7 +114,7 @@ for (nonce = 1; nonce < nonces; nonce++) {
 		}	
 		// If function identifier has not been used twice, 
 		// assign it to this sequence identifier. 
-		if (function_count < 2) { functs[seq] = temp; seq++; }
+		if (function_count < repeat) { functs[seq] = temp; seq++; }
 		function_count=0;
 		// Get psuedo random next intpart
 		k2 *= k2;
@@ -116,53 +123,62 @@ for (nonce = 1; nonce < nonces; nonce++) {
 	} // while all 16 seq slots are not filled
 
 		// Print output option
-	if (0) {
+	if (1) {
 		cout << "Current algo's function sequence: " << endl; 
-		for (int i=0; i<nFunctions; i++) { cout << functs[i] << " "; } 
-		cout << endl;
-		for (int i=nFunctions; i<nFunctions*2; i++) { 
+		for (int i=0; i < nSeq; i++) { 
 			cout << functs[i] << " "; 	
 		} 	
 		cout << endl;
 	}
 
+	 //  for (int i=0; i < nSeq; i++) {  functs[i] = 8; }
+
 	// get sysTime in microseconds.
 	sysTime = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 
 	// Test single fuinction:
-	// for (int i=0; i<seq; i++) {  functs[i] = 1; }
+
 
 
 	// ===== POW LOOP FOR THIS NONCE======. 
 	// Repeat the algorithm many times, using each 
 	// iteration's output as next input. 
 	for (int64_t i = 1; i < iterations; i++) { 
-			// this loop => 2 ns
-			// k=k; // 0 ns
-			// k=k*k; // 2 ns 
-			// Calling a function from here is 0.6 us.
-		 
-			// The following for and if did not slow it down disproportionally 
-		for (seq = 0; seq<nFunctions*2; seq++) {
+			// multiply long doubles: 2.7 ns, int64_t = 1 ns
+			// k=k; is 0 ns
+
+		for (seq = 0; seq < nSeq; seq++) {
+
 			// k = select_and_do_operation(k,functs[seq]); // old method
 
-			if ( seq == 1 ){ k = pow(k,5.123); } // 10 ns
-			else if ( seq == 2 )  { k = log(k); } // 80 ns
-			else if	( seq == 3 )	{ k = exp(k*1e-11); } // 72 ns
-			else if	( seq == 4 )	{ k = sin(k*6.28e-12)+1.01; } // 70 ns
-			else if	( seq == 5 )	{ k = asin(k*1e-12); } // 30 ns
-			else if	( seq == 6 )	{ k = sinh(k*1e-11); } // 55 ns
-			else { k = asinh(k*1e-12); } // 53 ns
-
-			// cout << functs[seq] << " ";  
- 
-			// the following is 20 ns.
+/*			// Switch was 1/2 as fast as "if" with equations, but 10x faster with k=k.
+			switch (functs[seq]) {
+				case 1: k = log(k);
+				case 2: k = exp(k*1e-11);
+				case 3: k = sin(k*6.28e-12)+1.01;
+				case 4: k = pow(k,5.123);
+				case 5: k = sinh(k*1e-11);
+				case 6: k = asinh(k*1e-12);
+				case 7: k = 1/erf(0.001*sqrt(sqrt(k)));  
+				case 8: k = asin(k*1e-12);  
+			}
+*/		// if took about 2 ns per if.  But determining this was tricky.
+			if ( functs[seq] == 1 ){ k = log(k); } // 80 ns, 100 ns w/ long doubles
+			else if ( functs[seq] == 2 ){ k = pow(k,5.123); } // 60 ns
+			else if ( functs[seq] == 3 ){ k = exp(k*1e-11); } // 72 ns
+			else if ( functs[seq] == 4 ){ k = sin(k*6.28e-12)+1.01; } // 70 ns, 88 w/ long doubles
+			else if ( functs[seq] == 5 ){ k = sinh(k*1e-11); } // 53 ns asinh(k*1e-12); 
+			else if ( functs[seq] == 6 ){ k = asinh(k*1e-12);  } // 55 ns
+			else if ( functs[seq] == 7 ){ k = 1/erf(0.001*sqrt(sqrt(k)));   } //  40 ns, 60 w/ longs
+			else if ( functs[seq] == 8 ){ k = asin(k*1e-12); } // 30 ns, 50 w/ longs
+			// the following is 16 ns with doubles, 33 ns long doubles.
 			k = frexp (k , &n);
-			k = modf (100*k , &intpart); 
-			k = (int64_t)(k*1e12);
+			k = modfl ( 100*k, &intpart); // modf for doubles, modfl for long doubles
+			k = (int64_t)(k*1e12);  // this worked a lot better than trunc() which was unstable
 		 	if (k < 1e11)      { k *=10;  }
-			else if (k < 1e10) { k *=100;  }     
-		} 
+			else if (k < 1e10) { k *=100;  } 
+ 
+	} 
 		// get 2 metrics to check if output is random
 		// std_dev = pow(k-last_avg,2);
 		// averg = averg + k/iterations;
@@ -194,6 +210,14 @@ int main()
 {
 
 POW();
+
+ // show all digits 
+/*  std::cout << std::numeric_limits<long double>::digits10 << std::endl;
+typedef std::numeric_limits< long double > ldbl;
+long double d = 123456789012345678;
+cout.precision(ldbl::max_digits10);
+cout << "Pi: " << fixed << d << endl;  */
+ 
 return 0;
 
 } ;
