@@ -11,7 +11,7 @@ using namespace std;
 // Compiled with  g++ -std=c++8
 
 // Copyright 2018 Zawy, MIT License
-// This is a POW. 
+// This is a POW. It is not for actual use, but for demonstration.
 // The goal is to have a simple, random, non-optimizable algorithm that 
 // requires heavy processor use. The algorithm changes every nonce. 
 // RAM or large cache should not make it faster, or my goal has 
@@ -137,8 +137,6 @@ for (nonce = 1; nonce < nonces; nonce++) {
 	sysTime = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 
 	// Test single fuinction:
-
-
 
 	// ===== POW LOOP FOR THIS NONCE======. 
 	// Repeat the algorithm many times, using each 
