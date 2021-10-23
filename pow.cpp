@@ -8,29 +8,25 @@
 #include <limits> // for being able to display all double digits
 using namespace std; 
 
+// THIS DOES NOT WORK. This was preliminary work I didn't complete. Read the comments below to
+// see what it was supposed to do.  I wanted to present the idea more than show working code.
+
 // Compiled with  g++ -std=c++8
 
 // Copyright 2018 Zawy, MIT License
-// This is a POW. It is not for actual use, but for demonstration.
-// The goal is to have a simple, random, non-optimizable algorithm that 
-// requires heavy processor use. The algorithm changes every nonce. 
-// RAM or large cache should not make it faster, or my goal has 
-// not been acheived. My belief is that ASICS, FPGAs, GPUs, CPUs, and 
-// cell phones are on a more equal footing with this in terms of 
-// hashes per Watt because the simpe math functions should already be 
-// optimized, and this random combination of them should not be 
-// mathematically optimizable.
-//
-// A key component is a "extract 12 digits routine.  It disconnects
-// the previous function's math determininism from the next one
-// so that a mathmatically or logicial simplification should not be possible.
-// It also discards the lower 2 digits of the double to prevent differences
-// in systems.
-// 
+// This is POW idea that changes to a random algorithm every nonce. 
+// It is not for actual use, it's just a demonstration.
+// I didn't even use 
+// The idea is to use a random combination of simple math functions that should 
+// already be optimized on CPUs and to change the combination every *nonce*. So it's
+// a random POW every nonce. In my simple understanding, this is supposedly harder 
+// for FPGA's & ASICs to optimize in terms of how much energy they use per solution. 
+// It changes to 1 out of 9 biillion possible algorithms every nonce.  
+//  
 // What it does:  
-// k = sha265(nonce + previous hash)  // modeled but not included here.
-// Use top 12 decimal digits of k to design algorithm and seed.
-// Algorithm is a sequence of 8 possible math functions used exactly twice.
+// k = sha265(nonce + previous hash) 
+// Use top 12 decimal digits of k to design algorithm and supply a seed.
+// Algorithm is a sequence of 8 different math functions with each function used twice.
 // Number of possible algorithms is a little over (8!)^2 = 1E9.
 // Algorithm iterates N times using it's output as next input.
 // After N iterations, final k (12 digits) goes through sha256 to see if it 
@@ -44,22 +40,18 @@ long double extract_12_digits
 		// Throw away top 2 significands because of base 2 problem. This has a
 		// very important side effect: prevents the math operation
 		// sequences from being simplified mathematically. 
-		k = modfl (100*k , &intpart); // modf for doubles, modfl for long doubles
+		k = modfl (100*k , &intpart); // modfl for long doubles
 		// Get remaining top 12 digits. Thows away lower digits that
 		// might have had a difference on different systems.
 		k = (int64_t)(k*1e12);
-		// 		 for (int i=1; i<14; i++) { 	if (k<1e11) { k*=10; }  }
-		// if (k < 1e11) { k*=10;}
-		// else if (k < 1e10){ k*=100;}
-		 if (k < 1e11)      { k *=10;  }
-		 else if (k < 1e10) { k *=100;  }
-		
+		if (k < 1e11)      { k *=10;  }
+		else if (k < 1e10) { k *=100;  }	
   	return k;
 } 
 
 int POW
  () {
-int64_t iterations = 100000; // for each nonce
+int64_t iterations = 1E5; // for each nonce
 
 int64_t nonce, nonces = 50; // number of nonces to simulate
 vector<int64_t> output(nonces);
